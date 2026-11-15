@@ -1,0 +1,327 @@
+definitions:
+  # =========================================================================
+  # Course Tree — Primary Skills API Response
+  # =========================================================================
+  CourseTree:
+    type: object
+    description: >
+      Full course tree response. Contains complete skill tree with levels, progress,
+      sections, and metadata. This replaces the deprecated language_data field.
+    properties:
+      id:
+        type: string
+        description: Course ID
+        example: "DUOLINGO_ZH-CN_RU"
+      subject:
+        type: string
+        description: Subject type
+        enum:
+          - language
+          - chess
+          - music
+          - math
+        example: "language"
+      fromLanguage:
+        type: string
+        description: Native/from language code
+        example: "ru"
+      learningLanguage:
+        type: string
+        description: Target/learning language code
+        example: "zh"
+      topic:
+        type: string
+        description: Course topic identifier
+        example: "zh"
+      treeId:
+        type: string
+        description: Tree identifier
+      xp:
+        type: integer
+        description: Total XP earned in this course
+        example: 16784
+      crowns:
+        type: integer
+        description: Total crowns earned
+        example: 20
+      wordsLearned:
+        type: integer
+        description: Words learned count (typically 0 in new API)
+        example: 0
+      status:
+        type: string
+        description: Course status
+        enum:
+          - RELEASED
+          - BETA
+          - HIDDEN
+        example: "RELEASED"
+      healthEnabled:
+        type: boolean
+        description: Whether hearts/health system is enabled for this course
+      placementTestAvailable:
+        type: boolean
+        description: Whether placement test is available
+      pathSectioned:
+        $ref: '#/definitions/PathSectioned'
+      pathSectionsSummary:
+        $ref: '#/definitions/PathSectionsSummary'
+      sections:
+        $ref: '#/definitions/Sections'
+      skills:
+        $ref: '#/definitions/Skills'
+      scoreMetadata:
+        $ref: '#/definitions/ScoreMetadata'
+      forYouMetadata:
+        type: object
+        description: Personalized metadata
+        additionalProperties: true
+      sideQuestProgress:
+        type: object
+        description: Side quest progress data
+        additionalProperties: true
+      trackingProperties:
+        type: object
+        description: Course tracking properties
+        additionalProperties: true
+      activePathSectionId:
+        type: string
+        description: ID of the currently active path section
+        nullable: true
+
+  # =========================================================================
+  # Path Sectioned — Skill Tree with Levels
+  # =========================================================================
+  PathSectioned:
+    type: array
+    description: >
+      Full skill tree organized by sections. Each section contains levels with
+      completion states. This is the primary source for skill progress data.
+    items:
+      $ref: '#/definitions/PathSection'
+
+  PathSection:
+    type: object
+    description: A section of the skill tree
+    properties:
+      id:
+        type: string
+        description: Section ID
+      title:
+        type: string
+        description: Section title
+      iconId:
+        type: string
+        description: Section icon identifier
+      skillType:
+        type: string
+        description: Skill type
+      levels:
+        type: array
+        description: Levels in this section
+        items:
+          $ref: '#/definitions/PathLevel'
+      sectionIndex:
+        type: integer
+        description: Section index in tree
+      totalLevels:
+        type: integer
+        description: Total levels in section
+      completedLevels:
+        type: integer
+        description: Completed levels in section
+      locked:
+        type: boolean
+        description: Whether section is locked
+      shortName:
+        type: string
+        description: Short section name
+      urlName:
+        type: string
+        description: URL-safe section name
+
+  PathLevel:
+    type: object
+    description: >
+      A level within a section. The state determines completion status:
+      - legendary: Fully mastered (strength ≈ 1.0, "golden")
+      - passed: Completed but not legendary (strength ≈ 0.75)
+      - active: Currently active (strength ≈ 0.5)
+      - locked: Not yet accessible (strength = 0.0)
+    properties:
+      id:
+        type: string
+        description: Level ID
+      skillId:
+        type: string
+        description: Associated skill ID
+      state:
+        type: string
+        enum:
+          - legendary
+          - passed
+          - active
+          - locked
+        description: >
+          Level state. Maps to approximate strength:
+          legendary=1.0, passed=0.75, active=0.5, locked=0.0
+      level:
+        type: integer
+        description: Level number
+      isLegendary:
+        type: boolean
+        description: Whether level is fully mastered (golden)
+      shortName:
+        type: string
+      iconId:
+        type: string
+        description: Level icon identifier
+      skillType:
+        type: string
+
+  # =========================================================================
+  # Path Sections Summary — Compact Progress
+  # =========================================================================
+  PathSectionsSummary:
+    type: array
+    description: Compact progress summary per section
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Section ID
+        completedLevels:
+          type: integer
+          description: Number of completed levels
+        totalLevels:
+          type: integer
+          description: Total levels in section
+        locked:
+          type: boolean
+          description: Whether section is locked
+
+  # =========================================================================
+  # Sections — Section Summaries with CEFR
+  # =========================================================================
+  Sections:
+    type: array
+    description: Section summaries with CEFR information
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        iconId:
+          type: string
+        skillType:
+          type: string
+        sectionIndex:
+          type: integer
+        cefrLevel:
+          type: string
+          description: CEFR level for this section (A1, A2, B1, B2, C1, C2)
+          nullable: true
+        cefrGoal:
+          type: string
+          nullable: true
+        completedLevels:
+          type: integer
+        totalLevels:
+          type: integer
+        locked:
+          type: boolean
+
+  # =========================================================================
+  # Skills — Skill Objects
+  # =========================================================================
+  Skills:
+    type: array
+    description: >
+      Array of skill objects. Each skill contains lessons, levels, and progress data.
+      For ZH-CN course, this array has ~310 entries.
+    items:
+      $ref: '#/definitions/Skill'
+
+  Skill:
+    type: object
+    description: A skill/lesson within the course
+    properties:
+      id:
+        type: string
+        description: Skill unique identifier
+        example: "262c1eb958b2d2b3f9cf4e43ca049487"
+      name:
+        type: string
+        description: Skill display name
+      shortName:
+        type: string
+        description: Short skill name
+      urlName:
+        type: string
+        description: URL-safe skill name
+      skillType:
+        type: string
+        description: Type of skill
+      iconId:
+        type: string
+        description: Icon identifier for this skill
+      lessons:
+        type: integer
+        description: Number of lessons in skill
+      levels:
+        type: integer
+        description: Number of levels in skill
+      finishedLessons:
+        type: integer
+        description: Number of finished lessons
+      finishedLevels:
+        type: integer
+        description: Number of finished levels
+      accessible:
+        type: boolean
+        description: Whether skill is accessible
+      hasFinalLevel:
+        type: boolean
+        description: Whether skill has a final level
+      hasLevelReview:
+        type: boolean
+        description: Whether skill has level review
+      strength:
+        type: number
+        description: >
+          Skill strength (0.0 to 1.0). Note: this field is often null in the
+          new API. Strength should be computed from pathSectioned level states.
+        nullable: true
+      tipsAndNotes:
+        type: array
+        description: Tips and notes for this skill
+        items:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Score Metadata
+  # =========================================================================
+  ScoreMetadata:
+    type: object
+    description: CEFR score information
+    properties:
+      reachedScore:
+        type: number
+        description: Current CEFR-based score
+        nullable: true
+      maxScore:
+        type: number
+        description: Maximum possible score
+        nullable: true
+      cefrLevel:
+        type: string
+        description: Current CEFR level
+        nullable: true
+      percentToNextLevel:
+        type: number
+        description: Percentage to next CEFR level
+        nullable: true

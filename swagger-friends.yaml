@@ -1,12 +1,16 @@
 swagger: "2.0"
 info:
-  title: Duolingo Unofficial API (Friends)
-  description: Unofficial API description for Duolingo.
-  version: 1.0.0
-host: friends-prod.duolingo.com
+  title: Duolingo Unofficial API (Friends & Social)
+  description: >
+    Social and friends-related endpoints.
+    
+    **Host change (2026):** The `friends-prod.duolingo.com` subdomain is no longer used.
+    All social endpoints are now proxied through `www.duolingo.com` or `ios-api-2.duolingo.com`.
+    This spec documents the original friend-related endpoints that now live on the main host.
+  version: 2.0.0
+host: www.duolingo.com
 basePath: /
 schemes:
-  - http
   - https
 consumes:
   - application/json
@@ -18,23 +22,258 @@ securityDefinitions:
     type: apiKey
     name: Authorization
     in: header
+    description: "Bearer <jwt_token>"
+  JwtCookie:
+    type: apiKey
+    name: Cookie
+    in: cookie
+    description: "jwt_token=<token>"
 
 security:
   - BearerAuth: []
-  
-paths:
-  /kudos/{userID}:
-    $ref: "./operations/user_kudos.yaml"
-  /kudos/{userID}/drawer:
-    $ref: "./operations/kudos_drawer.yaml"
-  /kudos/offers:
-    $ref: "./operations/kudos_offers.yaml"
-  /kudos/received:
-    $ref: "./operations/kudos_received.yaml"
-  /kudos/{userID}/feed:
-    $ref: "./operations/kudos_feed.yaml"
-  /kudos:
-    $ref: "./operations/kudos.yaml"
-  /kudos/assets:
-    $ref: "./operations/kudos_assets.yaml"
 
+x-parameters:
+  UserID:
+    in: path
+    name: userID
+    required: true
+    type: integer
+    minimum: 1
+    description: Numeric user ID
+
+paths:
+  # =========================================================================
+  # Following & Followers (primary endpoints)
+  # =========================================================================
+  /users/{userID}/following:
+    summary: Get users this user follows
+    description: >
+      Returns list of followed users with cursor pagination.
+      This is the primary following endpoint on the main host.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: cursor
+        type: string
+        description: Pagination cursor from previous response
+    responses:
+      200:
+        description: Following list with cursor
+        schema:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+            cursor:
+              type: string
+              nullable: true
+
+  /users/{userID}/followers:
+    summary: Get followers
+    description: >
+      Returns list of followers with cursor pagination.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: cursor
+        type: string
+        description: Pagination cursor from previous response
+    responses:
+      200:
+        description: Followers list with cursor
+        schema:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+            cursor:
+              type: string
+              nullable: true
+
+  # =========================================================================
+  # Legacy Friends API (deprecated — use /users/{id}/following)
+  # =========================================================================
+  /2023-05-23/friends/users/{userID}/following:
+    x-deprecated: true
+    x-notes: "Use /users/{id}/following instead."
+    summary: Get following (legacy format)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: viewerId
+        type: integer
+        description: Authenticated user's ID
+      - in: query
+        name: pageSize
+        type: integer
+        default: 500
+    responses:
+      200:
+        description: Following data
+        schema:
+          type: object
+          properties:
+            following:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+
+  /2023-05-23/friends/users/{userID}/followers:
+    x-deprecated: true
+    x-notes: "Use /users/{id}/followers instead."
+    summary: Get followers (legacy format)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: viewerId
+        type: integer
+        description: Authenticated user's ID
+      - in: query
+        name: pageSize
+        type: integer
+        default: 500
+    responses:
+      200:
+        description: Followers data
+        schema:
+          type: object
+          properties:
+            followers:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+
+  # =========================================================================
+  # Friends Streak
+  # =========================================================================
+  /friends-streak/matches:
+    summary: Get friends streak matches
+    description: Returns friends streak match data. Typically returns empty object.
+    responses:
+      200:
+        description: Friends streak matches
+        schema:
+          type: object
+
+  # =========================================================================
+  # Recommendations
+  # =========================================================================
+  /users/{userID}/recommendations:
+    summary: Get user recommendations
+    description: >
+      Returns ~100 user recommendations with cursor pagination.
+      Response size ~145KB.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: cursor
+        type: string
+        description: Pagination cursor
+    responses:
+      200:
+        description: User recommendations
+        schema:
+          type: object
+          additionalProperties: true
+
+  /users/{userID}/built-avatar-states:
+    summary: Get built avatar states
+    description: Returns avatar expression states.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Avatar states
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Kudos
+  # =========================================================================
+  /kudos/{userID}/drawer:
+    summary: Get kudos drawer
+    description: >
+      Returns kudos drawer data. Null for inactive kudos users.
+      Verified working on www.duolingo.com.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Kudos drawer
+        schema:
+          type: object
+          properties:
+            kudosConfig:
+              type: object
+              properties:
+                maxAvatars:
+                  type: integer
+            kudosDrawer:
+              type: array
+              items:
+                type: object
+              nullable: true
+
+  /kudos/{userID}/feed:
+    summary: Get kudos feed
+    description: >
+      Returns kudos feed. Empty for inactive kudos users.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Kudos feed
+        schema:
+          type: object
+          properties:
+            kudosConfig:
+              type: object
+              properties:
+                reactions:
+                  type: array
+                  items:
+                    type: string
+                shareLabel:
+                  type: string
+            kudosFeed:
+              type: array
+              items:
+                type: object
+
+  /kudos/assets:
+    summary: Get kudos assets
+    description: Returns kudos drawer and feed assets (~375KB).
+    responses:
+      200:
+        description: Kudos assets
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Deprecated Kudos endpoints
+  # =========================================================================
+  /kudos/{userID}:
+    x-deprecated: true
+    $ref: "./operations/user_kudos.yaml"
+
+  /kudos/offers:
+    x-deprecated: true
+    x-status: "deprecated"
+    $ref: "./operations/kudos_offers.yaml"
+
+  /kudos/received:
+    x-deprecated: true
+    x-status: "deprecated"
+    $ref: "./operations/kudos_received.yaml"

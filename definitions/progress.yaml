@@ -1,0 +1,169 @@
+definitions:
+  # =========================================================================
+  # Progress Response — Goals, Badges, Difficulty
+  # =========================================================================
+  ProgressResponse:
+    type: object
+    description: >
+      Comprehensive progress data including daily quests, monthly challenges,
+      badges earned, and difficulty settings.
+      Endpoint: GET /users/{id}/progress?timezone=Europe/Moscow
+    properties:
+      quests:
+        $ref: '#/definitions/Quests'
+      monthlyChallenges:
+        $ref: '#/definitions/MonthlyChallenges'
+      badges:
+        $ref: '#/definitions/Badges'
+      difficulty:
+        type: integer
+        description: Current difficulty level
+        example: 3
+      goalCategories:
+        $ref: '#/definitions/GoalCategories'
+
+  Quests:
+    type: array
+    description: Daily and monthly quests with completion status
+    items:
+      $ref: '#/definitions/Quest'
+
+  Quest:
+    type: object
+    description: A single quest/challenge
+    properties:
+      questId:
+        type: string
+        description: Quest identifier
+      goalId:
+        type: string
+        description: Associated goal ID
+      completed:
+        type: boolean
+        description: Whether quest is completed
+      goalCategory:
+        type: string
+        description: Category of quest
+        enum:
+          - DAILY_QUESTS
+          - MONTHLY_CHALLENGES
+          - CHESS
+          - MUSIC
+          - SOCIAL
+        example: "DAILY_QUESTS"
+      title:
+        type: string
+        description: Quest title
+      description:
+        type: string
+        description: Quest description
+      target:
+        type: integer
+        description: Target value for quest completion
+      current:
+        type: integer
+        description: Current progress toward target
+      timestamp:
+        type: integer
+        format: int64
+        description: Quest creation timestamp
+      expiresAt:
+        type: integer
+        format: int64
+        description: Quest expiration timestamp
+      reward:
+        $ref: '#/definitions/QuestReward'
+
+  QuestReward:
+    type: object
+    description: Quest reward
+    properties:
+      type:
+        type: string
+        enum:
+          - XP
+          - GEMS
+          - LINGOTS
+          - BADGE
+        example: "XP"
+      amount:
+        type: integer
+        description: Reward amount
+
+  MonthlyChallenges:
+    type: array
+    description: Monthly challenges with completion status
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        completed:
+          type: boolean
+        target:
+          type: integer
+        current:
+          type: integer
+        month:
+          type: string
+          description: Month in format YYYY-MM
+          example: "2026-10"
+        badgeId:
+          type: string
+          nullable: true
+
+  Badges:
+    type: array
+    description: Earned badges for monthly challenges
+    items:
+      $ref: '#/definitions/Badge'
+
+  Badge:
+    type: object
+    description: A badge earned for completing a monthly challenge
+    properties:
+      id:
+        type: string
+        description: Badge ID
+      name:
+        type: string
+        description: Badge name
+      description:
+        type: string
+        description: Badge description
+      iconId:
+        type: string
+        description: Badge icon identifier
+      earnedAt:
+        type: integer
+        format: int64
+        description: Timestamp when badge was earned
+      month:
+        type: string
+        description: Month badge was earned (YYYY-MM)
+        example: "2025-08"
+
+  GoalCategories:
+    type: object
+    description: Goal categories for different course types
+    properties:
+      dailyQuests:
+        type: array
+        items:
+          type: string
+      chess:
+        type: array
+        items:
+          type: string
+      music:
+        type: array
+        items:
+          type: string
+      social:
+        type: array
+        items:
+          type: string

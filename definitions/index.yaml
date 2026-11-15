@@ -23,3 +23,17 @@ definitions:
         type: string
       lastReferrer:
         type: string
+
+  # =========================================================================
+  # New definitions (2026) — referenced for convenience
+  # =========================================================================
+  # Course tree definitions are in course_tree.yaml:
+  # - CourseTree: Full course tree response
+  # - PathSectioned: Skill tree with levels
+  # - Skill: Individual skill object
+  # - ScoreMetadata: CEFR score info
+  #
+  # Progress definitions are in progress.yaml:
+  # - ProgressResponse: Goals, badges, difficulty
+  # - Quest: Daily/monthly quest
+  # - Badge: Monthly challenge badge

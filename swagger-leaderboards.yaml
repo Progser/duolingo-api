@@ -1,8 +1,20 @@
 swagger: "2.0"
 info:
   title: Duolingo Unofficial API (Leaderboards)
-  description: Unofficial API description for Duolingo.
-  version: 1.0.0
+  description: >
+    Leaderboard endpoints.
+    
+    **Status (2026): BROKEN / SPA-ONLY**
+    
+    The `duolingo-leaderboards-prod.duolingo.com` subdomain returns SPA HTML,
+    not JSON API data. The leaderboard data is served through the web application
+    and requires a browser session to access.
+    
+    The `leaderboard.duolingo.com` subdomain also returns SPA HTML via the
+    `www.duolingo.com` proxy.
+    
+    No programmatic leaderboard API is currently available.
+  version: 2.0.0
 host: duolingo-leaderboards-prod.duolingo.com
 basePath: /
 schemes:
@@ -21,7 +33,12 @@ securityDefinitions:
 
 security:
   - BearerAuth: []
-  
+
 paths:
   /leaderboards/{leaderboardID}/users/{userID}:
+    x-deprecated: true
+    x-status: "broken"
+    x-notes: >
+      Returns HTML SPA page, not JSON API data. Leaderboard endpoint is not
+      available programmatically. Requires browser session.
     $ref: "./operations/leaderboards.yaml"

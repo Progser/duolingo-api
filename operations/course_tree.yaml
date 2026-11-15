@@ -1,0 +1,50 @@
+get:
+  tags:
+    - Course Trees
+  summary: Get full course tree
+  description: >
+    Returns the complete course tree with skills, levels, progress paths, and metadata.
+    This is the primary skills API, replacing deprecated `language_data` and `skill_data` endpoints.
+
+    **Version requirements:** Always requires version prefix (2017-06-30, 2023-05-23, or 2024-01-01).
+    No-version path returns 404.
+
+    **User-Agent requirements:**
+    - Language courses (e.g., DUOLINGO_ZH-CN_RU): SPA/browser User-Agent required.
+      Mobile User-Agent returns 400.
+    - Non-language courses (CHESS_CH, MUSIC_MT): any User-Agent works.
+
+    **Response sizes:**
+    - Language courses: ~9.2 MB
+    - Chess courses: ~2.7 MB
+    - Music courses: ~1.2 MB
+
+    **Content negotiation:** Set `Accept: application/json` for JSON responses.
+  parameters:
+    - in: path
+      name: userID
+      required: true
+      type: integer
+      minimum: 1
+      description: Numeric user ID
+    - in: path
+      name: courseId
+      required: true
+      type: string
+      description: >
+        Course ID identifier. Examples:
+        - DUOLINGO_ZH-CN_RU (Chinese for Russian speakers)
+        - DUOLINGO_ES_EN (Spanish for English speakers)
+        - CHESS_CH (Chess)
+        - MUSIC_MT (Music)
+  responses:
+    200:
+      description: Full course tree
+      schema:
+        $ref: "../definitions/course_tree.yaml#/definitions/CourseTree"
+    400:
+      description: >
+        Bad request. Common when using mobile User-Agent for language courses.
+        Use SPA/browser User-Agent for language courses.
+    404:
+      description: Course or user not found

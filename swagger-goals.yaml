@@ -1,27 +1,178 @@
 swagger: "2.0"
 info:
-  title: Duolingo Unofficial API (Goals)
-  description: Unofficial API description for Duolingo.
-  version: 1.0.0
-host: goals-api.duolingo.com
+  title: Duolingo Unofficial API (Goals & Progress)
+  description: >
+    Goals, progress, and quests endpoints.
+    
+    **Host change (2026):** The `goals-api.duolingo.com` subdomain is proxied through
+    `www.duolingo.com` and returns the same data. Both hosts work identically.
+    This spec documents the goals-related endpoints on both hosts.
+    
+    **Content negotiation:** Some endpoints return protobuf by default.
+    Set `Accept: application/json` for JSON responses.
+  version: 2.0.0
+host: www.duolingo.com
 basePath: /
 schemes:
-  - http
   - https
 consumes:
   - application/json
 produces:
   - application/json
+  - application/x-protobuf
 
 securityDefinitions:
   BearerAuth:
     type: apiKey
     name: Authorization
     in: header
+    description: "Bearer <jwt_token>"
+  JwtCookie:
+    type: apiKey
+    name: Cookie
+    in: cookie
+    description: "jwt_token=<token>"
 
 security:
   - BearerAuth: []
 
+x-parameters:
+  UserID:
+    in: path
+    name: userID
+    required: true
+    type: integer
+    minimum: 1
+    description: Numeric user ID
+
 paths:
+  # =========================================================================
+  # Progress — Primary progress endpoint
+  # =========================================================================
+  /users/{userID}/progress:
+    summary: Get user progress with goals and badges
+    description: >
+      Returns comprehensive progress data including daily quests, monthly challenges,
+      badges earned, and difficulty settings.
+      
+      **Required parameter:** timezone (IANA format, e.g. "Europe/Moscow")
+      
+      Works on both `www.duolingo.com` and `goals-api.duolingo.com`.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: timezone
+        type: string
+        required: true
+        example: "Europe/Moscow"
+        description: User's timezone (IANA format)
+    responses:
+      200:
+        description: Progress with goals, badges, and difficulty
+        schema:
+          $ref: "./definitions/progress.yaml#/definitions/ProgressResponse"
+
+  # =========================================================================
+  # Daily Quests
+  # =========================================================================
+  /users/{userID}/daily-quests:
+    summary: Get daily quests
+    description: >
+      Returns daily quests with completion status.
+      
+      **Important:** Returns protobuf by default. Set `Accept: application/json`
+      header to receive JSON responses.
+      
+      Response size: ~242 bytes (protobuf) or ~534 bytes (JSON).
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Daily quests
+        schema:
+          type: object
+          properties:
+            quests:
+              type: array
+              items:
+                $ref: "./definitions/progress.yaml#/definitions/Quest"
+
+  /users/{userID}/quests:
+    summary: Get quests (legacy)
+    description: >
+      Returns quests. Typically returns empty array for most users.
+      Use /users/{id}/progress or /users/{id}/daily-quests instead.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Quest list (often empty)
+        schema:
+          type: array
+          items:
+            type: object
+
+  # =========================================================================
+  # Streak Goals
+  # =========================================================================
+  /users/{userID}/streak-goal-current:
+    summary: Get current streak goal
+    description: Returns the current streak goal with checkpoints.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Current streak goal
+        schema:
+          type: object
+          properties:
+            hasActiveGoal:
+              type: boolean
+            streakGoal:
+              type: object
+              properties:
+                lastCompleteGoal:
+                  type: integer
+                nextSelectedGoal:
+                  type: object
+                  properties:
+                    length:
+                      type: integer
+                    dayInterval:
+                      type: integer
+                checkpoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      length:
+                        type: integer
+
+  /users/{userID}/streak-goal-next-options:
+    summary: Get available streak goal upgrades
+    description: Returns available streak goal options to upgrade to.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Available streak goal options
+        schema:
+          type: object
+          properties:
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  length:
+                    type: integer
+                  dayInterval:
+                    type: integer
+
+  # =========================================================================
+  # Legacy Quests endpoint (deprecated)
+  # =========================================================================
   /quests:
+    x-deprecated: true
+    x-notes: "Use /users/{id}/progress or /users/{id}/daily-quests instead."
     $ref: "./operations/quests.yaml"

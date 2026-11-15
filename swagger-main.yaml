@@ -5,35 +5,29 @@ info:
     Unofficial API description for Duolingo.
     
     **API Status (2026-11):** The 2023-05-23 API is the primary stable endpoint.
-    The 2017-06-30 API is partially deprecated — only some endpoints still work.
-    Legacy /api/1/* endpoints are removed (404).
+    The 2017-06-30 API is partially deprecated — some endpoints still work.
+    The 2024-01-01 API works for some endpoints as well.
     
     **Authentication:** Use `POST /2023-05-23/login` with mobile User-Agent to get a JWT.
     The JWT is long-lived (expires ~2169). Use it via `Authorization: Bearer <token>` header
-    or `jwt_token` cookie. Many endpoints also require the mobile User-Agent.
+    or `jwt_token` cookie.
     
-    **Breaking Change:** The `language_data` field (skills, words, strength) is no longer
-    returned by `GET /users/{username}` or any tested endpoint. The OpenAPI spec still
-    documents it for historical reference, but clients should not depend on it.
+    **Breaking Change (2025):** The `language_data` field (skills, words, strength) is no longer
+    returned by `GET /users/{username}` or any tested endpoint. Use the course tree endpoint
+    instead: `GET /{version}/users/{id}/courses/{courseId}`.
     
-    **Working endpoints:**
-    - POST /2023-05-23/login — password authentication
-    - GET /2023-05-23/users/{id} — user data with fields param
-    - GET /users/{username} — full profile (no language_data)
-    - GET /2017-06-30/users/{id} — legacy user data (no language_data)
-    - GET /2023-05-23/friends/users/{id}/following — followers
-    - GET /2023-05-23/friends/users/{id}/followers — followed users
-    - GET /users/{userId}/streak-goal-current — streak goal
-    - GET /2023-05-23/shop-items — shop items
-    - GET /2017-06-30/shop-items — shop items (legacy)
-    - GET /2017-06-30/friends/users/{id}/following — friends (legacy)
+    **Alternative Host:** `ios-api-2.duolingo.com` works identically to `www.duolingo.com`.
+    Referenced in `/2023-05-23/config` as `apiHost`.
     
-    **Broken endpoints:**
-    - POST /2017-06-30/sessions — "App update required"
-    - GET /vocabulary/overview — returns HTML (SPA page)
-    - GET /api/1/* — 404 (legacy API removed)
-    - GET /graphql — returns HTML (SPA page)
-  version: 2.0.0
+    **User-Agent Requirements:**
+    - Login: mobile UA required (`DuolingoMobile/5.132.0 (iPhone; iOS 17.0)`)
+    - Course tree (language courses): SPA/browser UA required
+    - Course tree (non-language): any UA works
+    - Other endpoints: any UA works
+    
+    **Content Negotiation:** Some endpoints return protobuf by default.
+    Set `Accept: application/json` to get JSON responses.
+  version: 2.1.0
 host: www.duolingo.com
 basePath: /
 schemes:
@@ -42,130 +36,549 @@ consumes:
   - application/json
 produces:
   - application/json
+  - application/x-protobuf
 
 securityDefinitions:
   BearerAuth:
     type: apiKey
     name: Authorization
     in: header
+    description: "Bearer <jwt_token>"
   JwtCookie:
     type: apiKey
     name: Cookie
     in: cookie
+    description: "jwt_token=<token>"
 
 security:
   - BearerAuth: []
 
+x-parameters:
+  UserID:
+    in: path
+    name: userID
+    required: true
+    type: integer
+    minimum: 1
+    description: Numeric user ID
+  CourseID:
+    in: path
+    name: courseId
+    required: true
+    type: string
+    description: Course ID (e.g. DUOLINGO_ZH-CN_RU, CHESS_CH, MUSIC_MT)
+  Username:
+    in: path
+    name: username
+    required: true
+    type: string
+    description: Duolingo username
+
 paths:
-  # --- Authentication ---
+  # =========================================================================
+  # Authentication
+  # =========================================================================
   /2023-05-23/login:
     $ref: "./operations/login_mobile.yaml"
 
   /2017-06-30/login:
     x-deprecated: true
+    x-status: "broken"
     x-notes: "Returns 401 nginx basic auth error. Use /2023-05-23/login instead."
     $ref: "./operations/login.yaml"
 
-  # --- User profiles ---
+  # =========================================================================
+  # User Profiles
+  # =========================================================================
   /users/{username}:
-    x-notes: "Returns full profile (~3.7MB JSON). language_data field is deprecated and no longer returned."
+    x-notes: "Returns full profile (~3.7MB JSON). language_data is deprecated. Use course tree instead."
     $ref: "./operations/users_by_username.yaml"
 
   /2023-05-23/users/{userID}:
+    summary: Get user data by ID with field selection
+    description: >
+      Returns user data with specified fields. Supports nested field selection.
+      This is the primary endpoint for fetching user data.
+      
+      Supported fields: courses, currentCourse, health, streakData, gems, lingots,
+      shopItems, experiments, plusDiscounts, email, username, name, privacySettings,
+      rewardCardsInventory, trackingProperties, plusInfo, streakFreezes,
+      practiceQueue, weeklyReportInfo (empty).
     parameters:
-      - in: path
-        name: userID
-        required: true
-        type: integer
-        minimum: 1
-        description: User ID
+      - $ref: "#/x-parameters/UserID"
       - in: query
         name: fields
-        type: array
-        items:
-          type: string
+        type: string
         description: >
-          Fields to retrieve. Supported: courses, health, streak, streakData,
-          courses{skills}, language_data (deprecated), id, username, name, totalXp, etc.
-          Nested field selection syntax works (e.g. streakData{currentStreak,longestStreak}).
-    $ref: "./operations/users_logged.yaml"
+          Comma-separated field names. Examples: "courses,health,streakData"
+          or "streakData{currentStreak,longestStreak}"
+    responses:
+      200:
+        description: User data with requested fields
+        schema:
+          type: object
+          additionalProperties: true
+      404:
+        description: User not found
 
   /2017-06-30/users/{userID}:
     x-deprecated: true
-    x-notes: "Returns user data but without language_data. Use /2023-05-23/users/{id} instead."
+    x-notes: "Legacy user data endpoint. Use /2023-05-23/users/{id} instead."
     parameters:
-      - in: path
-        name: userID
-        required: true
-        type: integer
-        minimum: 1
-        description: User ID
+      - $ref: "#/x-parameters/UserID"
       - in: query
         name: fields
-        type: array
-        items:
-          type: string
-        description: Fields to retrieve
-    $ref: "./operations/users_logged.yaml"
-
-  /2017-06-30/users:
-    $ref: "./operations/users_not_logged.yaml"
-
-  # --- Friends ---
-  /2023-05-23/friends/users/{userID}/following:
-    summary: Get users this user is following
-    description: Returns list of users the authenticated user follows
-    parameters:
-      - in: path
-        name: userID
-        required: true
-        type: integer
-        description: User ID
+        type: string
+        description: Comma-separated field names
     responses:
       200:
-        description: List of followed users
+        description: User data with requested fields
         schema:
-          type: array
-          items:
-            $ref: "./definitions/friends.yaml#/definitions/FriendUser"
-      404:
-        description: User not found
+          type: object
+          additionalProperties: true
 
-  /2023-05-23/friends/users/{userID}/followers:
-    summary: Get users following this user
-    description: Returns list of followers
+  /2023-05-23/users:
+    summary: Resolve username to user ID
+    description: "Returns user ID for a given username. Query: /2023-05-23/users?fields=users{id}&username=Progser"
     parameters:
-      - in: path
-        name: userID
-        required: true
-        type: integer
-        description: User ID
+      - in: query
+        name: fields
+        type: string
+        example: "users{id}"
+      - in: query
+        name: username
+        type: string
+        description: Username to resolve
     responses:
       200:
-        description: List of followers
-        schema:
-          type: array
-          items:
-            $ref: "./definitions/friends.yaml#/definitions/FriendUser"
-      404:
-        description: User not found
-
-  /2017-06-30/friends/users/{userID}/following:
-    x-deprecated: true
-    summary: Get users this user follows (legacy)
-    parameters:
-      - in: path
-        name: userID
-        required: true
-        type: integer
-        description: User ID
-    responses:
-      200:
-        description: List of followed users
+        description: User ID resolution
         schema:
           type: object
           properties:
-            friends:
+            users:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+      404:
+        description: User not found
+
+  /2017-06-30/users:
+    x-deprecated: true
+    $ref: "./operations/users_not_logged.yaml"
+
+  # =========================================================================
+  # User Profile (no-version)
+  # =========================================================================
+  /users/{userID}/profile:
+    summary: Get user profile with social data
+    description: Returns profile with social data. Supports pageSize parameter.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: pageSize
+        type: integer
+        default: 10
+        description: Number of social entries to return
+    responses:
+      200:
+        description: User profile with social data
+        schema:
+          type: object
+          additionalProperties: true
+
+  /users/{userID}/following:
+    summary: Get users this user follows
+    description: Returns list of followed users with cursor pagination.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: cursor
+        type: string
+        description: Pagination cursor from previous response
+    responses:
+      200:
+        description: Following list with cursor
+        schema:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+            cursor: { type: string }
+
+  /users/{userID}/followers:
+    summary: Get users following this user
+    description: Returns list of followers with cursor pagination.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: cursor
+        type: string
+        description: Pagination cursor from previous response
+    responses:
+      200:
+        description: Followers list with cursor
+        schema:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+            cursor: { type: string }
+
+  # Legacy friends endpoints
+  /2023-05-23/friends/users/{userID}/following:
+    x-deprecated: true
+    x-notes: "Use /users/{id}/following instead. This returns different format with viewerId param."
+    summary: Get following (legacy format)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: viewerId
+        type: integer
+        description: Authenticated user's ID
+      - in: query
+        name: pageSize
+        type: integer
+        default: 500
+    responses:
+      200:
+        description: Following data
+        schema:
+          type: object
+          properties:
+            following:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+
+  /2023-05-23/friends/users/{userID}/followers:
+    x-deprecated: true
+    x-notes: "Use /users/{id}/followers instead."
+    summary: Get followers (legacy format)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: viewerId
+        type: integer
+        description: Authenticated user's ID
+      - in: query
+        name: pageSize
+        type: integer
+        default: 500
+    responses:
+      200:
+        description: Followers data
+        schema:
+          type: object
+          properties:
+            followers:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+
+  # =========================================================================
+  # Course Trees — New Skills API
+  # =========================================================================
+  /2017-06-30/users/{userID}/courses/{courseId}:
+    summary: Get full course tree (2017 API)
+    $ref: "./operations/course_tree.yaml"
+
+  /2023-05-23/users/{userID}/courses/{courseId}:
+    summary: Get full course tree (2023 API) — primary skills endpoint
+    description: >
+      **This replaces the deprecated language_data/skill_data endpoints.**
+      Returns the complete course tree with skills, levels, progress, and metadata.
+      
+      **Requirements:**
+      - Language courses (e.g. DUOLINGO_ZH-CN_RU): SPA/browser User-Agent required
+      - Non-language courses (CHESS_CH, MUSIC_MT): any User-Agent works
+      - Response size varies: 9.2MB for language courses, 2.7MB for Chess, 1.2MB for Music
+    $ref: "./operations/course_tree.yaml"
+
+  /2024-01-01/users/{userID}/courses/{courseId}:
+    summary: Get full course tree (2024 API)
+    $ref: "./operations/course_tree.yaml"
+
+  # =========================================================================
+  # Progress & Goals
+  # =========================================================================
+  /users/{userID}/progress:
+    summary: Get user progress with goals and badges
+    description: >
+      Returns comprehensive progress data including daily quests, monthly challenges,
+      badges earned, and difficulty settings. Requires timezone parameter.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: timezone
+        type: string
+        required: true
+        example: "Europe/Moscow"
+        description: User's timezone (IANA format)
+    responses:
+      200:
+        description: Progress with goals, badges, and difficulty
+        schema:
+          $ref: "./definitions/progress.yaml#/definitions/ProgressResponse"
+
+  /users/{userID}/daily-quests:
+    summary: Get daily quests
+    description: >
+      Returns daily quests with completion status. 
+      **Requires `Accept: application/json` header** — returns protobuf by default.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Daily quests
+        schema:
+          type: object
+          properties:
+            quests:
+              type: array
+              items:
+                type: object
+                properties:
+                  questId: { type: string }
+                  goalId: { type: string }
+                  completed: { type: boolean }
+                  goalCategory: { type: string, example: "DAILY_QUESTS" }
+
+  /users/{userID}/quests:
+    summary: Get quests (legacy)
+    description: Returns quests. Typically returns empty array.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Quest list (often empty)
+        schema:
+          type: array
+          items:
+            type: object
+
+  /users/{userID}/streak-goal-current:
+    summary: Get current streak goal
+    description: Returns the current streak goal with checkpoints.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Current streak goal
+        schema:
+          type: object
+          properties:
+            hasActiveGoal: { type: boolean }
+            streakGoal:
+              type: object
+              properties:
+                lastCompleteGoal: { type: integer }
+                nextSelectedGoal:
+                  type: object
+                  properties:
+                    length: { type: integer }
+                    dayInterval: { type: integer }
+                checkpoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      length: { type: integer }
+
+  /users/{userID}/streak-goal-next-options:
+    summary: Get available streak goal upgrades
+    description: Returns available streak goal options to upgrade to.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Available streak goal options
+        schema:
+          type: object
+          properties:
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  length: { type: integer }
+                  dayInterval: { type: integer }
+
+  # =========================================================================
+  # Mistakes API
+  # =========================================================================
+  /v2/mistakes/users/{userID}/courses/{courseID}/count:
+    summary: Get mistake count for a course
+    description: Returns the number of mistakes for a specific course.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - $ref: "#/x-parameters/CourseID"
+    responses:
+      200:
+        description: Mistake count
+        schema:
+          type: object
+          properties:
+            numberMistakes: { type: integer }
+      404:
+        description: Course or user not found
+
+  /v2/mistakes/users/{userID}/courses/{courseID}:
+    summary: Get mistakes list for a course
+    description: >
+      Returns detailed list of mistakes for a course, including challenge type,
+      skill ID, timestamp, and solution translation.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - $ref: "#/x-parameters/CourseID"
+    responses:
+      200:
+        description: Mistakes list
+        schema:
+          type: object
+          properties:
+            mistakes:
+              type: array
+              items:
+                type: object
+                properties:
+                  challengeIdentifier:
+                    type: object
+                    properties:
+                      generatorId: { type: string }
+                      specificType: { type: string, example: "tap_complete" }
+                  courseId: { type: string }
+                  skillId: { type: string }
+                  timestamp: { type: integer, format: int64 }
+                  solutionTranslation: { type: string }
+                  inboxResolvedCount: { type: integer }
+                  learningResolvedCount: { type: integer }
+                  userId: { type: integer }
+      404:
+        description: Course or user not found
+
+  # =========================================================================
+  # XP & Energy
+  # =========================================================================
+  /2017-06-30/users/{userID}/xp_summaries:
+    summary: Get XP summaries (legacy)
+    $ref: "./operations/xpsummaries.yaml"
+
+  /2023-05-23/users/{userID}/xp_summaries:
+    summary: Get XP summaries (2023 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Daily XP summaries
+        schema:
+          type: object
+          properties:
+            xpSummaries:
+              type: array
+              items:
+                type: object
+                properties:
+                  timestamp: { type: integer, format: int64 }
+                  xp: { type: integer }
+
+  /2024-01-01/users/{userID}/xp_summaries:
+    summary: Get XP summaries (2024 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Daily XP summaries
+        schema:
+          type: object
+          properties:
+            xpSummaries:
+              type: array
+              items:
+                type: object
+                properties:
+                  timestamp: { type: integer, format: int64 }
+                  xp: { type: integer }
+
+  /2017-06-30/users/{userID}/energy-info:
+    summary: Get energy info (legacy)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Energy/hearts info
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/users/{userID}/energy-info:
+    summary: Get energy info (2023 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Energy/hearts info
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2024-01-01/users/{userID}/energy-info:
+    summary: Get energy info (2024 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Energy/hearts info
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Shop
+  # =========================================================================
+  /2023-05-23/shop-items:
+    summary: Get shop items (2023 API)
+    responses:
+      200:
+        description: Shop items
+        schema:
+          type: object
+          properties:
+            shopItems:
+              type: array
+              items:
+                $ref: "./definitions/shop_items.yaml#/definitions/ShopItem"
+
+  /2017-06-30/shop-items:
+    x-deprecated: true
+    $ref: "./operations/shop_items.yaml"
+
+  # =========================================================================
+  # Subscriptions
+  # =========================================================================
+  /2017-06-30/users/{userID}/subscriptions:
+    summary: Get user subscriptions
+    description: Returns list of users this user subscribes to.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Subscriptions list
+        schema:
+          type: object
+          properties:
+            subscriptions:
               type: array
               items:
                 type: object
@@ -173,75 +586,421 @@ paths:
                   id: { type: integer }
                   username: { type: string }
                   name: { type: string }
-                  xp: { type: integer }
+                  monthlyXp: { type: integer }
+                  totalXp: { type: integer }
                   picture: { type: string }
-      404:
-        description: Not found
 
-  /2017-06-30/friends/{userID}/matches:
-    x-deprecated: true
-    $ref: "./operations/friends_matches.yaml"
-
-  # --- Streak ---
-  /users/{userID}/streak-goal-current:
-    summary: Get current streak goal
-    description: Returns the current streak goal with checkpoints
+  # =========================================================================
+  # Kudos
+  # =========================================================================
+  /kudos/{userID}/drawer:
+    summary: Get kudos drawer
+    description: Returns kudos drawer data. Null for inactive kudos users.
     parameters:
-      - in: path
-        name: userID
-        required: true
-        type: integer
-        description: User ID
+      - $ref: "#/x-parameters/UserID"
     responses:
       200:
-        description: Current streak goal
+        description: Kudos drawer
         schema:
           type: object
           properties:
-            id: { type: string }
-            type: { type: string, example: "streak_goal" }
-            currentCheckpointIndex: { type: integer }
-            checkpoints:
+            kudosConfig:
+              type: object
+              properties:
+                maxAvatars: { type: integer }
+            kudosDrawer:
               type: array
               items:
                 type: object
-                properties:
-                  xpGoal: { type: integer }
-                  checkpointIndex: { type: integer }
-      404:
-        description: Not found
+              nullable: true
 
-  # --- Shop ---
-  /2023-05-23/shop-items:
-    summary: Get shop items (2023 API)
+  /kudos/{userID}/feed:
+    summary: Get kudos feed
+    description: Returns kudos feed. Empty for inactive kudos users.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
     responses:
       200:
-        description: Shop items
+        description: Kudos feed
         schema:
-          type: array
-          items:
-            $ref: "./definitions/shop_items.yaml#/definitions/ShopItem"
+          type: object
+          properties:
+            kudosConfig:
+              type: object
+              properties:
+                reactions:
+                  type: array
+                  items: { type: string }
+                shareLabel: { type: string }
+            kudosFeed:
+              type: array
+              items:
+                type: object
 
-  /2017-06-30/shop-items:
+  /kudos/assets:
+    summary: Get kudos assets
+    description: Returns kudos drawer and feed assets (~375KB).
+    responses:
+      200:
+        description: Kudos assets
+        schema:
+          type: object
+          additionalProperties: true
+
+  /kudos/offers:
     x-deprecated: true
-    $ref: "./operations/shop_items.yaml"
+    $ref: "./operations/kudos_offers.yaml"
 
-  # --- Subscriptions ---
-  /2017-06-30/users/{userID}/subscriptions:
+  /kudos/received:
     x-deprecated: true
-    $ref: "./operations/subscriptions.yaml"
+    $ref: "./operations/kudos_received.yaml"
 
-  # --- XP Summaries ---
-  /2017-06-30/users/{userID}/xp_summaries:
+  # =========================================================================
+  # Chess
+  # =========================================================================
+  /chess/1/{userID}/daily-puzzle:
+    summary: Get daily chess puzzle config
+    description: Returns configuration for the daily chess puzzle.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Daily puzzle config
+        schema:
+          type: object
+          additionalProperties: true
+
+  /chess/1/{userID}/matches:
+    summary: Get chess match history
+    description: Returns chess match history with ELO ratings.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Match history
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Social
+  # =========================================================================
+  /friends-streak/matches:
+    summary: Get friends streak matches
+    description: Returns friends streak match data. Typically empty.
+    responses:
+      200:
+        description: Friends streak matches
+        schema:
+          type: object
+
+  /users/{userID}/recommendations:
+    summary: Get user recommendations
+    description: Returns ~100 user recommendations with cursor pagination.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+      - in: query
+        name: cursor
+        type: string
+        description: Pagination cursor
+    responses:
+      200:
+        description: User recommendations (~145KB)
+        schema:
+          type: object
+          additionalProperties: true
+
+  /users/{userID}/built-avatar-states:
+    summary: Get built avatar states
+    description: Returns avatar expression states.
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Avatar states
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Privacy & Referral
+  # =========================================================================
+  /2017-06-30/users/{userID}/privacy-settings:
+    summary: Get privacy settings (legacy)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Privacy settings
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/users/{userID}/privacy-settings:
+    summary: Get privacy settings (2023 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Privacy settings
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2017-06-30/users/{userID}/referral-passes:
+    summary: Get referral passes (legacy)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Referral pass info
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/users/{userID}/referral-passes:
+    summary: Get referral passes (2023 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Referral pass info
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2024-01-01/users/{userID}/referral-passes:
+    summary: Get referral passes (2024 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Referral pass info
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2017-06-30/referral-passes/availability:
+    summary: Check referral pass availability
+    parameters:
+      - in: query
+        name: invite
+        type: string
+        description: Invitation code
+    responses:
+      200:
+        description: Referral availability
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/referral-passes/availability:
+    summary: Check referral pass availability (2023 API)
+    parameters:
+      - in: query
+        name: invite
+        type: string
+        description: Invitation code
+    responses:
+      200:
+        description: Referral availability
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2017-06-30/users/{userID}/perfect-lessons-summary:
+    summary: Get perfect lessons summary (legacy)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Perfect lessons count
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/users/{userID}/perfect-lessons-summary:
+    summary: Get perfect lessons summary (2023 API)
+    parameters:
+      - $ref: "#/x-parameters/UserID"
+    responses:
+      200:
+        description: Perfect lessons count
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Onboarding
+  # =========================================================================
+  /2017-06-30/onboarding/validate-email:
+    summary: Validate email availability (legacy)
+    parameters:
+      - in: query
+        name: email
+        type: string
+        description: Email to validate
+    responses:
+      200:
+        description: Email availability
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/onboarding/validate-email:
+    summary: Validate email availability (2023 API)
+    parameters:
+      - in: query
+        name: email
+        type: string
+        description: Email to validate
+    responses:
+      200:
+        description: Email availability
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2017-06-30/onboarding/validate-username:
+    summary: Validate username availability (legacy)
+    parameters:
+      - in: query
+        name: username
+        type: string
+        description: Username to validate
+    responses:
+      200:
+        description: Username availability
+        schema:
+          type: object
+          additionalProperties: true
+
+  /2023-05-23/onboarding/validate-username:
+    summary: Validate username availability (2023 API)
+    parameters:
+      - in: query
+        name: username
+        type: string
+        description: Username to validate
+    responses:
+      200:
+        description: Username availability
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Config
+  # =========================================================================
+  /2023-05-23/config:
+    summary: Get API configuration
+    description: >
+      Returns comprehensive config including course catalog, XP level cutoffs,
+      feature flags, API hosts, and tracking properties (~22KB).
+    parameters:
+      - in: query
+        name: ui_language
+        type: string
+        description: UI language code
+    responses:
+      200:
+        description: API configuration
+        schema:
+          type: object
+          properties:
+            apiHost: { type: string, description: "Alternative API host" }
+            speechHost: { type: string, description: "TTS host" }
+            dictionaryHost: { type: string }
+            xpLevelCutoffs:
+              type: array
+              items: { type: integer }
+              description: "25 XP level thresholds"
+            featureFlags:
+              type: array
+              items:
+                type: object
+                description: "200+ feature flags with country rollouts"
+            courses:
+              type: array
+              items:
+                type: object
+                description: "Complete language pair catalog"
+            clientExperiments:
+              type: array
+              items:
+                type: object
+            trackingProperties:
+              type: object
+            appUpdateWall:
+              type: object
+            staleContentAge: { type: integer }
+            ageRestrictionLimit: { type: integer }
+            eventBlocklist:
+              type: array
+              items: { type: string }
+
+  # =========================================================================
+  # Words & Courses
+  # =========================================================================
+  /2023-05-23/words-list/supported-courses:
+    summary: Get supported courses for word lists
+    description: Returns 39 supported language pairs for word learning.
+    responses:
+      200:
+        description: Supported courses
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # B2B
+  # =========================================================================
+  /b2b/pricing/:
+    summary: Get B2B pricing
+    description: Returns B2B pricing info with currency and plans (~12.8KB).
+    responses:
+      200:
+        description: B2B pricing
+        schema:
+          type: object
+          additionalProperties: true
+
+  # =========================================================================
+  # Weekly Report
+  # =========================================================================
+  /2017-06-30/weekly-report-info:
     x-deprecated: true
-    $ref: "./operations/xpsummaries.yaml"
+    x-status: "empty"
+    x-notes: "Returns empty object {}. Deprecated."
+    responses:
+      200:
+        description: Empty object
+        schema:
+          type: object
 
-  # --- Mistakes ---
-  /v2/mistakes/users/{userID}/courses/{courseID}/count:
+  /2023-05-23/weekly-report-info:
     x-deprecated: true
-    $ref: "./operations/count_mistakes.yaml"
+    x-status: "empty"
+    x-notes: "Returns empty object {}. Deprecated."
+    responses:
+      200:
+        description: Empty object
+        schema:
+          type: object
 
-  # --- Broken / Removed endpoints (documented for reference) ---
+  /2024-01-01/weekly-report-info:
+    x-deprecated: true
+    x-status: "empty"
+    x-notes: "Returns empty object {}. Deprecated."
+    responses:
+      200:
+        description: Empty object
+        schema:
+          type: object
+
+  # =========================================================================
+  # Broken / Removed endpoints (documented for reference)
+  # =========================================================================
   /vocabulary/overview:
     x-deprecated: true
     x-status: "broken"
