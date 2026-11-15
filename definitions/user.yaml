@@ -4,6 +4,8 @@ definitions:
       filter_stream:
         type: boolean
       language_data:
+        x-deprecated: true
+        x-notes: "No longer returned by the API since 2023. Skills, words, and strength data are not available through any tested endpoint."
         $ref: './language_data.yaml#/definitions/LanguageDataDict'
       last_streak:
         $ref: '#/definitions/LastStreak'
@@ -505,3 +507,138 @@ definitions:
           $ref: './misc.yaml#/definitions/ShopItem'
       health:
         $ref: './misc.yaml#/definitions/Health'
+
+  LoginResponse:
+    description: >
+      Full user data returned by POST /2023-05-23/login.
+      Does NOT include language_data or skills. Courses are returned as the `courses` array.
+      JWT token is returned in the `jwt` response header, not in the body.
+      The JWT expires in 2169 — effectively permanent.
+    type: object
+    properties:
+      id:
+        type: integer
+        description: Numeric user ID
+        example: 330251912945821
+      username:
+        type: string
+        example: "Progser"
+      name:
+        type: string
+        description: Full display name
+        example: "Сергей Юрин"
+      firstName:
+        type: string
+      lastName:
+        type: string
+      emailVerified:
+        type: boolean
+      picture:
+        type: string
+        description: Avatar URL
+      bio:
+        type: string
+      motivation:
+        type: string
+        example: "travel"
+      fromLanguage:
+        type: string
+        description: Native language code
+        example: "ru"
+      countryCode:
+        type: string
+        example: "RU"
+      timezone:
+        type: string
+        example: "Europe/Moscow"
+      timezoneOffset:
+        type: string
+        example: "+0300"
+      streak:
+        type: integer
+        description: Current site-wide streak
+      streakData:
+        type: object
+        properties:
+          currentStreak:
+            type: object
+            properties:
+              length: { type: integer }
+              startDate: { type: string, format: date }
+              endDate: { type: string, format: date }
+          previousStreak:
+            type: object
+            nullable: true
+          longestStreak:
+            type: object
+          updatedTimestamp: { type: integer }
+          updatedTimeZone: { type: string }
+          xpGoal: { type: integer }
+      totalXp:
+        type: integer
+      weeklyXp:
+        type: integer
+      xpGains:
+        type: array
+        description: Recent XP gains
+        items:
+          type: object
+          properties:
+            time: { type: integer }
+            xp: { type: integer }
+            skillId: { type: string, nullable: true }
+            eventType: { type: string, nullable: true }
+      xpGoal:
+        type: integer
+      courses:
+        type: array
+        description: Enrolled courses including languages, math, chess, music
+        items:
+          type: object
+          properties:
+            id: { type: string }
+            title: { type: string }
+            learningLanguage: { type: string }
+            fromLanguage: { type: string }
+            xp: { type: integer }
+            subject: { type: string }
+      currentCourseId:
+        type: string
+      hasPlus:
+        type: boolean
+      roles:
+        type: array
+        items: { type: string }
+      creationDate:
+        type: integer
+        description: Unix timestamp
+      trackingProperties:
+        type: object
+        description: Analytics and tracking
+        properties:
+          gems: { type: integer }
+          num_followers: { type: integer }
+          num_following: { type: integer }
+          streak: { type: integer }
+          ui_language: { type: string }
+          leaderboard_tier_name: { type: string }
+      items:
+        type: array
+        description: Purchased shop items
+        items:
+          type: object
+          properties:
+            id: { type: string }
+            itemName: { type: string }
+            purchaseDate: { type: integer }
+            quantity: { type: integer }
+      shopItems:
+        type: array
+        items:
+          $ref: './misc.yaml#/definitions/ShopItem'
+      health:
+        $ref: './misc.yaml#/definitions/Health'
+      tts_base_url:
+        type: string
+        description: TTS CDN base URL
+      [key: string]: unknown

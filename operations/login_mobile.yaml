@@ -1,0 +1,50 @@
+post:
+  tags: ["Login"]
+  summary: Mobile password authentication (primary login)
+  description: >
+    Authenticates with email/username and password. Returns full user data in the body
+    and a long-lived JWT token in the `jwt` response header.
+    
+    **Required:** User-Agent must be `DuolingoMobile/5.132.0 (iPhone; iOS 17.0)` or similar.
+    
+    **JWT:** The token expires in 2169 — effectively permanent. No refresh needed.
+    Use via `Authorization: Bearer <token>` or `jwt_token` cookie.
+  security: []
+  parameters:
+    - in: header
+      name: User-Agent
+      required: true
+      type: string
+      example: "DuolingoMobile/5.132.0 (iPhone; iOS 17.0)"
+    - in: body
+      name: credentials
+      required: true
+      schema:
+        type: object
+        required:
+          - identifier
+          - password
+        properties:
+          identifier:
+            type: string
+            description: Email address or username
+            example: "user@example.com"
+          password:
+            type: string
+            description: Account password
+            example: "password123"
+  responses:
+    200:
+      description: Login successful — user data in body, JWT in `jwt` header
+      headers:
+        jwt:
+          type: string
+          description: Long-lived JWT token
+      schema:
+        $ref: "../definitions/user.yaml#/definitions/LoginResponse"
+    400:
+      description: Invalid credentials or missing fields
+    403:
+      description: Login failed — wrong password or account disabled
+    default:
+      description: Unexpected error

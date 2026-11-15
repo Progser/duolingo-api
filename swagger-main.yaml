@@ -1,12 +1,42 @@
 swagger: "2.0"
 info:
-  title: Duolingo Unofficial API (Main)
-  description: Unofficial API description for Duolingo.
-  version: 1.0.0
+  title: Duolingo Unofficial API
+  description: >
+    Unofficial API description for Duolingo.
+    
+    **API Status (2026-11):** The 2023-05-23 API is the primary stable endpoint.
+    The 2017-06-30 API is partially deprecated — only some endpoints still work.
+    Legacy /api/1/* endpoints are removed (404).
+    
+    **Authentication:** Use `POST /2023-05-23/login` with mobile User-Agent to get a JWT.
+    The JWT is long-lived (expires ~2169). Use it via `Authorization: Bearer <token>` header
+    or `jwt_token` cookie. Many endpoints also require the mobile User-Agent.
+    
+    **Breaking Change:** The `language_data` field (skills, words, strength) is no longer
+    returned by `GET /users/{username}` or any tested endpoint. The OpenAPI spec still
+    documents it for historical reference, but clients should not depend on it.
+    
+    **Working endpoints:**
+    - POST /2023-05-23/login — password authentication
+    - GET /2023-05-23/users/{id} — user data with fields param
+    - GET /users/{username} — full profile (no language_data)
+    - GET /2017-06-30/users/{id} — legacy user data (no language_data)
+    - GET /2023-05-23/friends/users/{id}/following — followers
+    - GET /2023-05-23/friends/users/{id}/followers — followed users
+    - GET /users/{userId}/streak-goal-current — streak goal
+    - GET /2023-05-23/shop-items — shop items
+    - GET /2017-06-30/shop-items — shop items (legacy)
+    - GET /2017-06-30/friends/users/{id}/following — friends (legacy)
+    
+    **Broken endpoints:**
+    - POST /2017-06-30/sessions — "App update required"
+    - GET /vocabulary/overview — returns HTML (SPA page)
+    - GET /api/1/* — 404 (legacy API removed)
+    - GET /graphql — returns HTML (SPA page)
+  version: 2.0.0
 host: www.duolingo.com
 basePath: /
 schemes:
-  - http
   - https
 consumes:
   - application/json
@@ -18,24 +48,51 @@ securityDefinitions:
     type: apiKey
     name: Authorization
     in: header
+  JwtCookie:
+    type: apiKey
+    name: Cookie
+    in: cookie
 
 security:
   - BearerAuth: []
 
 paths:
-  /vocabulary/overview:
-    $ref: "./operations/vocabulary_overview.yaml"
-    
+  # --- Authentication ---
+  /2023-05-23/login:
+    $ref: "./operations/login_mobile.yaml"
+
   /2017-06-30/login:
+    x-deprecated: true
+    x-notes: "Returns 401 nginx basic auth error. Use /2023-05-23/login instead."
     $ref: "./operations/login.yaml"
 
+  # --- User profiles ---
   /users/{username}:
+    x-notes: "Returns full profile (~3.7MB JSON). language_data field is deprecated and no longer returned."
     $ref: "./operations/users_by_username.yaml"
 
-  /v2/mistakes/users/{userID}/courses/{courseID}/count:
-    $ref: "./operations/count_mistakes.yaml"
+  /2023-05-23/users/{userID}:
+    parameters:
+      - in: path
+        name: userID
+        required: true
+        type: integer
+        minimum: 1
+        description: User ID
+      - in: query
+        name: fields
+        type: array
+        items:
+          type: string
+        description: >
+          Fields to retrieve. Supported: courses, health, streak, streakData,
+          courses{skills}, language_data (deprecated), id, username, name, totalXp, etc.
+          Nested field selection syntax works (e.g. streakData{currentStreak,longestStreak}).
+    $ref: "./operations/users_logged.yaml"
 
   /2017-06-30/users/{userID}:
+    x-deprecated: true
+    x-notes: "Returns user data but without language_data. Use /2023-05-23/users/{id} instead."
     parameters:
       - in: path
         name: userID
@@ -51,20 +108,182 @@ paths:
         description: Fields to retrieve
     $ref: "./operations/users_logged.yaml"
 
-  /2017-06-30/friends/{userID}/matches:
-    $ref: "./operations/friends_matches.yaml"
-
   /2017-06-30/users:
     $ref: "./operations/users_not_logged.yaml"
 
-  /2017-06-30/users/{userID}/subscriptions:
-    $ref: "./operations/subscriptions.yaml"
+  # --- Friends ---
+  /2023-05-23/friends/users/{userID}/following:
+    summary: Get users this user is following
+    description: Returns list of users the authenticated user follows
+    parameters:
+      - in: path
+        name: userID
+        required: true
+        type: integer
+        description: User ID
+    responses:
+      200:
+        description: List of followed users
+        schema:
+          type: array
+          items:
+            $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+      404:
+        description: User not found
 
-  /2017-06-30/users/{userID}/xp_summaries:
-    $ref: "./operations/xpsummaries.yaml"
+  /2023-05-23/friends/users/{userID}/followers:
+    summary: Get users following this user
+    description: Returns list of followers
+    parameters:
+      - in: path
+        name: userID
+        required: true
+        type: integer
+        description: User ID
+    responses:
+      200:
+        description: List of followers
+        schema:
+          type: array
+          items:
+            $ref: "./definitions/friends.yaml#/definitions/FriendUser"
+      404:
+        description: User not found
+
+  /2017-06-30/friends/users/{userID}/following:
+    x-deprecated: true
+    summary: Get users this user follows (legacy)
+    parameters:
+      - in: path
+        name: userID
+        required: true
+        type: integer
+        description: User ID
+    responses:
+      200:
+        description: List of followed users
+        schema:
+          type: object
+          properties:
+            friends:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  username: { type: string }
+                  name: { type: string }
+                  xp: { type: integer }
+                  picture: { type: string }
+      404:
+        description: Not found
+
+  /2017-06-30/friends/{userID}/matches:
+    x-deprecated: true
+    $ref: "./operations/friends_matches.yaml"
+
+  # --- Streak ---
+  /users/{userID}/streak-goal-current:
+    summary: Get current streak goal
+    description: Returns the current streak goal with checkpoints
+    parameters:
+      - in: path
+        name: userID
+        required: true
+        type: integer
+        description: User ID
+    responses:
+      200:
+        description: Current streak goal
+        schema:
+          type: object
+          properties:
+            id: { type: string }
+            type: { type: string, example: "streak_goal" }
+            currentCheckpointIndex: { type: integer }
+            checkpoints:
+              type: array
+              items:
+                type: object
+                properties:
+                  xpGoal: { type: integer }
+                  checkpointIndex: { type: integer }
+      404:
+        description: Not found
+
+  # --- Shop ---
+  /2023-05-23/shop-items:
+    summary: Get shop items (2023 API)
+    responses:
+      200:
+        description: Shop items
+        schema:
+          type: array
+          items:
+            $ref: "./definitions/shop_items.yaml#/definitions/ShopItem"
 
   /2017-06-30/shop-items:
+    x-deprecated: true
     $ref: "./operations/shop_items.yaml"
 
+  # --- Subscriptions ---
+  /2017-06-30/users/{userID}/subscriptions:
+    x-deprecated: true
+    $ref: "./operations/subscriptions.yaml"
+
+  # --- XP Summaries ---
+  /2017-06-30/users/{userID}/xp_summaries:
+    x-deprecated: true
+    $ref: "./operations/xpsummaries.yaml"
+
+  # --- Mistakes ---
+  /v2/mistakes/users/{userID}/courses/{courseID}/count:
+    x-deprecated: true
+    $ref: "./operations/count_mistakes.yaml"
+
+  # --- Broken / Removed endpoints (documented for reference) ---
+  /vocabulary/overview:
+    x-deprecated: true
+    x-status: "broken"
+    x-notes: "Returns HTML SPA page, not API JSON. Vocabulary data is no longer available via API."
+    $ref: "./operations/vocabulary_overview.yaml"
+
   /notifications:
+    x-deprecated: true
+    x-status: "broken"
+    x-notes: "Returns HTML SPA page. Notifications endpoint is not available."
     $ref: "./operations/notifications.yaml"
+
+  /2017-06-30/sessions:
+    x-deprecated: true
+    x-status: "broken"
+    x-notes: "Returns 400 'App update required'. Practice sessions endpoint is no longer accessible."
+    post:
+      tags: ["Sessions"]
+      summary: Create practice session (BROKEN)
+      description: >
+        Creates a practice session. Returns 400 "App update required".
+        This endpoint requires the official Duolingo mobile app and cannot
+        be called from third-party clients.
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: sessionRequest
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: ["SKILL", "GLOBAL_PRACTICE", "INTRO_SKILL"]
+              fromLanguage:
+                type: string
+                example: "en"
+              learningLanguage:
+                type: string
+                example: "es"
+      responses:
+        200:
+          description: Practice session data (no longer returned)
+        400:
+          description: "App update required"
