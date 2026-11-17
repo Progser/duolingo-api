@@ -144,10 +144,13 @@ paths:
       - in: query
         name: fields
         type: string
+        required: true
         example: "users{id}"
+        description: "Required field selector"
       - in: query
         name: username
         type: string
+        required: true
         description: Username to resolve
     responses:
       200:
@@ -163,6 +166,8 @@ paths:
                   id: { type: integer }
       404:
         description: User not found
+      422:
+        description: "Unprocessable — missing required fields or username parameter"
 
   /2017-06-30/users:
     x-deprecated: true
@@ -356,17 +361,18 @@ paths:
                   goalCategory: { type: string, example: "DAILY_QUESTS" }
 
   /users/{userID}/quests:
-    summary: Get quests (legacy)
-    description: Returns quests. Typically returns empty array.
+    x-deprecated: true
+    x-status: "empty"
+    x-notes: "Returns empty object {}. Migrated to /users/{userID}/daily-quests and /users/{userID}/progress."
+    summary: Get quests (legacy, deprecated)
+    description: Returns empty array/object. Use daily-quests or progress instead.
     parameters:
       - $ref: "#/x-parameters/UserID"
     responses:
       200:
-        description: Quest list (often empty)
+        description: "Empty object (deprecated)"
         schema:
-          type: array
-          items:
-            type: object
+          type: object
 
   /users/{userID}/streak-goal-current:
     summary: Get current streak goal
@@ -748,15 +754,16 @@ paths:
           additionalProperties: true
 
   /2017-06-30/users/{userID}/referral-passes:
-    summary: Get referral passes (legacy)
+    x-status: "broken"
+    x-notes: "Returns HTML SPA page, not JSON API. Referral passes migrated to SPA-only flow."
+    summary: Get referral passes (legacy) — SPA only
     parameters:
       - $ref: "#/x-parameters/UserID"
     responses:
       200:
-        description: Referral pass info
+        description: "Returns HTML SPA page (not JSON)"
         schema:
-          type: object
-          additionalProperties: true
+          type: string
 
   /2023-05-23/users/{userID}/referral-passes:
     summary: Get referral passes (2023 API)
@@ -770,18 +777,21 @@ paths:
           additionalProperties: true
 
   /2024-01-01/users/{userID}/referral-passes:
-    summary: Get referral passes (2024 API)
+    x-status: "broken"
+    x-notes: "Returns HTML SPA page, not JSON API. 2024 API referral passes migrated to SPA."
+    summary: Get referral passes (2024 API) — SPA only
     parameters:
       - $ref: "#/x-parameters/UserID"
     responses:
       200:
-        description: Referral pass info
+        description: "Returns HTML SPA page (not JSON)"
         schema:
-          type: object
-          additionalProperties: true
+          type: string
 
   /2017-06-30/referral-passes/availability:
-    summary: Check referral pass availability
+    x-status: "broken"
+    x-notes: "Returns HTML SPA page, not JSON API. Referral availability check migrated to SPA."
+    summary: Check referral pass availability — SPA only
     parameters:
       - in: query
         name: invite
@@ -789,10 +799,9 @@ paths:
         description: Invitation code
     responses:
       200:
-        description: Referral availability
+        description: "Returns HTML SPA page (not JSON)"
         schema:
-          type: object
-          additionalProperties: true
+          type: string
 
   /2023-05-23/referral-passes/availability:
     summary: Check referral pass availability (2023 API)
@@ -835,10 +844,12 @@ paths:
   # =========================================================================
   /2017-06-30/onboarding/validate-email:
     summary: Validate email availability (legacy)
+    x-notes: "Returns 400 without email parameter. Requires email query param."
     parameters:
       - in: query
         name: email
         type: string
+        required: true
         description: Email to validate
     responses:
       200:
@@ -846,13 +857,17 @@ paths:
         schema:
           type: object
           additionalProperties: true
+      400:
+        description: "Bad request — email parameter required"
 
   /2023-05-23/onboarding/validate-email:
     summary: Validate email availability (2023 API)
+    x-notes: "Returns 400 without email parameter. Requires email query param."
     parameters:
       - in: query
         name: email
         type: string
+        required: true
         description: Email to validate
     responses:
       200:
@@ -860,13 +875,17 @@ paths:
         schema:
           type: object
           additionalProperties: true
+      400:
+        description: "Bad request — email parameter required"
 
   /2017-06-30/onboarding/validate-username:
     summary: Validate username availability (legacy)
+    x-notes: "Returns 400 without username parameter. Requires username query param."
     parameters:
       - in: query
         name: username
         type: string
+        required: true
         description: Username to validate
     responses:
       200:
@@ -874,13 +893,17 @@ paths:
         schema:
           type: object
           additionalProperties: true
+      400:
+        description: "Bad request — username parameter required"
 
   /2023-05-23/onboarding/validate-username:
     summary: Validate username availability (2023 API)
+    x-notes: "Returns 400 without username parameter. Requires username query param."
     parameters:
       - in: query
         name: username
         type: string
+        required: true
         description: Username to validate
     responses:
       200:
@@ -888,6 +911,8 @@ paths:
         schema:
           type: object
           additionalProperties: true
+      400:
+        description: "Bad request — username parameter required"
 
   # =========================================================================
   # Config

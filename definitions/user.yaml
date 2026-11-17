@@ -641,4 +641,4 @@ definitions:
       tts_base_url:
         type: string
         description: TTS CDN base URL
-      [key: string]: unknown
+      # [key: string]: unknown (TypeScript index signature)
